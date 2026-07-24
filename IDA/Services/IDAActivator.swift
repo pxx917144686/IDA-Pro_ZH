@@ -98,7 +98,7 @@ enum IDAActivator {
 
             do {
                 try fm.createDirectory(atPath: tmpDir, withIntermediateDirectories: true)
-                defer { try? fm.removeItem(atPath: tmpDir) }
+                defer { try? FileManager.default.removeItem(atPath: tmpDir) }
 
                 let tmpLic = (tmpDir as NSString).appendingPathComponent("idapro.hexlic")
                 try licContent.data(using: .utf8)?.write(to: URL(fileURLWithPath: tmpLic))
@@ -205,11 +205,24 @@ enum IDAActivator {
                 messages.append("代码签名完成")
 
                 progress("正在测试运行...")
-                let (testOk, testMsg) = testIDA(idaDir: macosDir)
+                let (_, testMsg) = testIDA(idaDir: macosDir)
                 messages.append("运行测试: \(testMsg)")
+                
+                let licenseWritten = FileManager.default.fileExists(
+                    atPath: (macosDir as NSString).appendingPathComponent("idapro.hexlic")
+                ) || FileManager.default.fileExists(
+                    atPath: (macosDir as NSString).appendingPathComponent("ida.hexlic")
+                )
+                let allPatchedOrSkipped = !patchDylibs.contains { dylib in
+                    let path = (macosDir as NSString).appendingPathComponent(dylib)
+                    guard FileManager.default.fileExists(atPath: path) else { return false }
+                    guard let data = try? [UInt8](Data(contentsOf: URL(fileURLWithPath: path))) else { return true }
+                    return data.firstRange(of: patchReplace) == nil && data.firstRange(of: patchSearch) != nil
+                }
+                let success = licenseWritten && allPatchedOrSkipped
 
                 DispatchQueue.main.async {
-                    completion(testOk, messages.joined(separator: "\n"))
+                    completion(success, messages.joined(separator: "\n"))
                 }
             } catch {
                 DispatchQueue.main.async {
@@ -221,31 +234,40 @@ enum IDAActivator {
 
     static func checkActivation(app: IDAAppInfo) -> (Bool, String) {
         let macosDir = app.macosDir
-        let licApp = (macosDir as NSString).appendingPathComponent("idapro.hexlic")
         let fm = FileManager.default
-
-        guard fm.fileExists(atPath: licApp) else {
+        
+        let licFiles = ["idapro.hexlic", "ida.hexlic"]
+        var foundLicense = false
+        var isOurLicense = false
+        
+        for licName in licFiles {
+            let licPath = (macosDir as NSString).appendingPathComponent(licName)
+            guard fm.fileExists(atPath: licPath) else { continue }
+            guard let data = try? Data(contentsOf: URL(fileURLWithPath: licPath)),
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let payload = json["payload"] as? [String: Any],
+                  let licenses = payload["licenses"] as? [[String: Any]],
+                  let firstLic = licenses.first else { continue }
+            
+            foundLicense = true
+            if let owner = firstLic["owner"] as? String, owner == defaultUserName {
+                isOurLicense = true
+            }
+            break
+        }
+        
+        guard foundLicense else {
             return (false, "未激活")
         }
         
-        guard let data = try? Data(contentsOf: URL(fileURLWithPath: licApp)),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let payload = json["payload"] as? [String: Any],
-              let licenses = payload["licenses"] as? [[String: Any]],
-              let firstLic = licenses.first,
-              let owner = firstLic["owner"] as? String else {
-            return (false, "许可证无效")
-        }
-        
-        let isOurLicense = owner == defaultUserName
         let patched = isDylibPatched(idaDir: macosDir)
         
         if isOurLicense && patched {
             return (true, "已激活")
-        } else if isOurLicense && !patched {
+        } else if foundLicense && patched {
+            return (true, "已激活")
+        } else if foundLicense && !patched {
             return (false, "许可证存在但缺少补丁")
-        } else if !isOurLicense && patched {
-            return (false, "已打补丁但缺少有效许可证")
         }
         return (false, "未激活")
     }

@@ -52,6 +52,12 @@ class AppState: ObservableObject {
     @Published var alertMessage = ""
 
     let audioManager = AudioManager.shared
+    
+    @Published var useCustomIcon = false {
+        didSet {
+            updateAppIcon()
+        }
+    }
 
     @Published var userName = "auth"
     @Published var userEmail = "admin@hex-rays.com"
@@ -60,6 +66,21 @@ class AppState: ObservableObject {
     init() {
         scanIDAApps()
         audioManager.play()
+        useCustomIcon = UserDefaults.standard.bool(forKey: "useCustomIcon")
+        updateAppIcon()
+    }
+    
+    private func updateAppIcon() {
+        UserDefaults.standard.set(useCustomIcon, forKey: "useCustomIcon")
+        if useCustomIcon {
+            if let icon = NSImage(named: "IDAAppIcon") {
+                NSWorkspace.shared.setIcon(icon, forFile: Bundle.main.bundlePath)
+                NSApp.applicationIconImage = icon.asMacOSAppIcon()
+            }
+        } else {
+            NSWorkspace.shared.setIcon(nil, forFile: Bundle.main.bundlePath)
+            NSApp.applicationIconImage = nil
+        }
     }
 
     func scanIDAApps() {
@@ -72,7 +93,7 @@ class AppState: ObservableObject {
                 IDAAppModel(
                     path: info.path,
                     version: info.version,
-                    localizationStatus: info.isPatched ? "已汉化" : "未汉化",
+                    localizationStatus: info.isPatched ? "已安装汉化" : "未安装汉化",
                     activationStatus: info.isActivated ? "已激活" : "未激活"
                 )
             }
@@ -98,19 +119,27 @@ class AppState: ObservableObject {
         guard let app = selectedApp else { return }
         isProcessing = true
         logOutput = "正在为 \(app.displayName) 安装汉化..."
-
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-            guard let info = self.findIDAAppInfo(from: app) else {
-                DispatchQueue.main.async { [weak self] in
-                    guard let self = self else { return }
+        let appPath = app.path
+        
+        DispatchQueue.global(qos: .userInitiated).async {
+            let allApps = IDALocalizer.detectApps()
+            let info = allApps.first { $0.path == appPath }
+            
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                guard let info = info else {
                     self.logOutput += "\n❌ 未找到对应 IDA 应用"
                     self.isProcessing = false
+                    return
                 }
-                return
+                self.runLocalizationInstall(app: info)
             }
-
-            IDALocalizer.install(app: info, progress: { msg in
+        }
+    }
+    
+    private func runLocalizationInstall(app: IDAAppInfo) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            IDALocalizer.install(app: app, progress: { msg in
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self else { return }
                     self.logOutput += "\n\(msg)"
@@ -135,19 +164,27 @@ class AppState: ObservableObject {
         guard let app = selectedApp else { return }
         isProcessing = true
         logOutput = "正在为 \(app.displayName) 卸载汉化..."
-
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-            guard let info = self.findIDAAppInfo(from: app) else {
-                DispatchQueue.main.async { [weak self] in
-                    guard let self = self else { return }
+        let appPath = app.path
+        
+        DispatchQueue.global(qos: .userInitiated).async {
+            let allApps = IDALocalizer.detectApps()
+            let info = allApps.first { $0.path == appPath }
+            
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                guard let info = info else {
                     self.logOutput += "\n❌ 未找到对应 IDA 应用"
                     self.isProcessing = false
+                    return
                 }
-                return
+                self.runLocalizationUninstall(app: info)
             }
-
-            IDALocalizer.uninstall(app: info, progress: { msg in
+        }
+    }
+    
+    private func runLocalizationUninstall(app: IDAAppInfo) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            IDALocalizer.uninstall(app: app, progress: { msg in
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self else { return }
                     self.logOutput += "\n\(msg)"
@@ -172,23 +209,34 @@ class AppState: ObservableObject {
         guard let app = selectedApp else { return }
         isProcessing = true
         logOutput = "正在激活 \(app.displayName)..."
-
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self = self else { return }
-            guard let info = self.findIDAAppInfo(from: app) else {
-                DispatchQueue.main.async { [weak self] in
-                    guard let self = self else { return }
+        let appPath = app.path
+        let name = userName
+        let email = userEmail
+        let expiry = expiryDate
+        
+        DispatchQueue.global(qos: .userInitiated).async {
+            let allApps = IDALocalizer.detectApps()
+            let info = allApps.first { $0.path == appPath }
+            
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                guard let info = info else {
                     self.logOutput += "\n❌ 未找到对应 IDA 应用"
                     self.isProcessing = false
+                    return
                 }
-                return
+                self.runActivation(app: info, userName: name, userEmail: email, expiryDate: expiry)
             }
-
+        }
+    }
+    
+    private func runActivation(app: IDAAppInfo, userName: String, userEmail: String, expiryDate: String) {
+        DispatchQueue.global(qos: .userInitiated).async {
             IDAActivator.activate(
-                app: info,
-                userName: self.userName,
-                userEmail: self.userEmail,
-                expiryDate: self.expiryDate,
+                app: app,
+                userName: userName,
+                userEmail: userEmail,
+                expiryDate: expiryDate,
                 progress: { msg in
                     DispatchQueue.main.async { [weak self] in
                         guard let self = self else { return }

@@ -40,16 +40,18 @@ enum IDALocalizer {
                     let isPatched = fm.fileExists(atPath: (macosDir as NSString).appendingPathComponent(dylibName))
 
                     var isActivated = false
-                    let licApp = (macosDir as NSString).appendingPathComponent("idapro.hexlic")
-                    if fm.fileExists(atPath: licApp),
-                       let data = try? Data(contentsOf: URL(fileURLWithPath: licApp)),
-                       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                       let payload = json["payload"] as? [String: Any],
-                       let licenses = payload["licenses"] as? [[String: Any]],
-                       let firstLic = licenses.first,
-                       let owner = firstLic["owner"] as? String,
-                       owner == "auth" {
-                        isActivated = true
+                    let licFiles = ["idapro.hexlic", "ida.hexlic"]
+                    for licName in licFiles {
+                        let licPath = (macosDir as NSString).appendingPathComponent(licName)
+                        if fm.fileExists(atPath: licPath),
+                           let data = try? Data(contentsOf: URL(fileURLWithPath: licPath)),
+                           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                           let payload = json["payload"] as? [String: Any],
+                           let licenses = payload["licenses"] as? [[String: Any]],
+                           !licenses.isEmpty {
+                            isActivated = true
+                            break
+                        }
                     }
 
                     results.append(IDAAppInfo(
