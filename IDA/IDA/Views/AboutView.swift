@@ -173,12 +173,47 @@ struct AboutView: View {
                                 .frame(width: 36, height: 36)
 
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("github")
+                                    Text("APP图形界面与操作逻辑代码实现")
                                         .font(.system(size: 14, weight: .semibold))
                                         .foregroundColor(.primary)
                                     Text("https://github.com/pxx917144686")
                                         .font(.system(size: 12))
                                         .foregroundColor(.accentColor)
+                                }
+
+                                Spacer()
+
+                                IDAColorfulIcon(systemName: "arrow.up.right.square", size: 14)
+                            }
+                        }
+                        
+                        Link(destination: URL(string: "https://github.com/Mac-XK")!) {
+                            HStack(spacing: 14) {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color(red: 1.0, green: 0.2, blue: 0.2),
+                                                    Color(red: 1.0, green: 0.6, blue: 0.0),
+                                                    Color(red: 0.2, green: 0.5, blue: 1.0),
+                                                    Color(red: 0.7, green: 0.3, blue: 1.0)
+                                                ],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                        .frame(width: 36, height: 36)
+                                        .opacity(0.15)
+
+                                    IDAColorfulIcon(systemName: "link", size: 16)
+                                }
+                                .frame(width: 36, height: 36)
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("汉化字符串文件提供")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(.primary)
                                     Text("https://github.com/Mac-XK")
                                         .font(.system(size: 12))
                                         .foregroundColor(.accentColor)

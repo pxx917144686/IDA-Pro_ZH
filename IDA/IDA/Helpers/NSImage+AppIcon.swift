@@ -81,7 +81,7 @@ extension NSImage {
             width: pixelSize.width,
             height: pixelSize.height * 0.5
         )
-        let highlightPath = CGPath(
+        _ = CGPath(
             roundedRect: highlightRect,
             cornerWidth: cornerRadius,
             cornerHeight: cornerRadius,
