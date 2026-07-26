@@ -6,6 +6,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     case localization = "汉化管理"
     case translation = "翻译管理"
     case activation = "IDA激活"
+    case surgeActivation = "Surge激活"
     case about = "关于"
 
     var id: String { rawValue }
@@ -15,6 +16,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .localization: return "globe"
         case .translation: return "character.book.closed.fill"
         case .activation: return "key.fill"
+        case .surgeActivation: return "bolt.shield.fill"
         case .about: return "info.circle"
         }
     }
@@ -52,6 +54,11 @@ class AppState: ObservableObject {
     @Published var alertMessage = ""
 
     let audioManager = AudioManager.shared
+
+    @Published var surgeApps: [SurgeAppInfo] = []
+    @Published var selectedSurgeApp: SurgeAppInfo?
+    @Published var isSurgeProcessing = false
+    @Published var surgeLogOutput = ""
     
     @Published var useCustomIcon = false {
         didSet {
@@ -65,6 +72,7 @@ class AppState: ObservableObject {
 
     init() {
         scanIDAApps()
+        scanSurgeApps()
         audioManager.play()
         useCustomIcon = UserDefaults.standard.bool(forKey: "useCustomIcon")
         updateAppIcon()
@@ -270,5 +278,47 @@ class AppState: ObservableObject {
         alertTitle = title
         alertMessage = message
         showAlert = true
+    }
+
+    func scanSurgeApps() {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let apps = SurgeActivator.shared.detectApps()
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.surgeApps = apps
+                if !apps.isEmpty && self.selectedSurgeApp == nil {
+                    self.selectedSurgeApp = apps[0]
+                }
+            }
+        }
+    }
+
+    func activateSurge() {
+        guard let app = selectedSurgeApp else { return }
+        isSurgeProcessing = true
+        surgeLogOutput = "正在激活 \(app.displayName)..."
+
+        SurgeActivator.shared.activate(
+            app: app,
+            progress: { [weak self] msg in
+                DispatchQueue.main.async {
+                    guard let self = self else { return }
+                    self.surgeLogOutput += "\n\(msg)"
+                }
+            },
+            completion: { [weak self] success, message in
+                DispatchQueue.main.async {
+                    guard let self = self else { return }
+                    self.isSurgeProcessing = false
+                    if success {
+                        self.surgeLogOutput += "\n✅ 激活成功\n\(message)"
+                    } else {
+                        self.surgeLogOutput += "\n❌ 激活失败\n\(message)"
+                        self.showError(title: "Surge 激活失败", message: message)
+                    }
+                    self.scanSurgeApps()
+                }
+            }
+        )
     }
 }

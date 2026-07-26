@@ -5,7 +5,7 @@ struct IDAApp: App {
     @StateObject private var appState = AppState()
 
     var body: some Scene {
-        WindowGroup("IDA 汉化工具箱") {
+        WindowGroup("工具") {
             ContentView()
                 .environmentObject(appState)
                 .frame(minWidth: 900, minHeight: 800)

@@ -199,6 +199,8 @@ struct DetailView: View {
                 TranslationView()
             case .activation:
                 ActivationView()
+            case .surgeActivation:
+                SurgeActivationView()
             case .about:
                 AboutView()
             }

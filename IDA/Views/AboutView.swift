@@ -173,7 +173,7 @@ struct AboutView: View {
                                 .frame(width: 36, height: 36)
 
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("APP图形界面与操作逻辑代码实现")
+                                    Text("图形界面与逻辑代码实现")
                                         .font(.system(size: 14, weight: .semibold))
                                         .foregroundColor(.primary)
                                     Text("https://github.com/pxx917144686")
