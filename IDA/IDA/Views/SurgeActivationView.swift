@@ -101,7 +101,9 @@ struct SurgeSelectionCard: View {
                     .font(.system(size: 16, weight: .semibold))
 
                 HStack(spacing: 8) {
-                    statusBadge(for: app.activationStatus)
+                    if app.activationStatus == .activated {
+                        statusBadge(for: app.activationStatus)
+                    }
                 }
             }
 

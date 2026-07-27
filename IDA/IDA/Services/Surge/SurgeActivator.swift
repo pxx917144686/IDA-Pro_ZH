@@ -21,7 +21,7 @@ import AppKit
     }
 
     var displayName: String {
-        "Surge \(version)"
+        version.isEmpty ? "Surge" : "Surge \(version)"
     }
 
     var macosDir: String {
@@ -126,7 +126,7 @@ import AppKit
             .replacingOccurrences(of: "Surge", with: "")
             .replacingOccurrences(of: ".app", with: "")
             .trimmingCharacters(in: .whitespaces)
-        return cleaned.isEmpty ? "5.x" : cleaned
+        return cleaned.isEmpty ? "" : cleaned
     }
 
     private func checkActivation(appPath: String) -> SurgeActivationStatus {
@@ -169,6 +169,53 @@ import AppKit
                     return
                 }
 
+                progress("正在检查系统环境...")
+                
+                let sipEnabled = surge_check_sip_enabled()
+                if sipEnabled {
+                    DispatchQueue.main.async {
+                        completion(false, """
+                        ❌ 无法激活：SIP（系统完整性保护）已开启
+
+                        Surge 授权需要向 Surge 进程注入授权模块，
+                        SIP 开启状态下无法完成注入操作。
+
+                        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                          关闭 SIP 操作教程
+                        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+                        【 Apple Silicon (M1/M2/M3/M4 芯片) 】
+                        第 1 步：完全关机
+                        第 2 步：按住电源键不松手，直到出现「正在载入启动选项」
+                        第 3 步：点击「选项」→「继续」
+                        第 4 步：点击顶部菜单栏「实用工具」→「终端」
+                        第 5 步：输入命令：
+                                 csrutil disable
+                        第 6 步：输入 y 确认，然后输入管理员密码
+                        第 7 步：输入 reboot 重启
+
+                        【 Intel 芯片 Mac 】
+                        第 1 步：重启 Mac，立即按住 Command + R
+                        第 2 步：进入恢复模式后，点击顶部菜单栏「实用工具」→「终端」
+                        第 3 步：输入命令：
+                                 csrutil disable
+                        第 4 步：输入 y 确认，然后输入管理员密码
+                        第 5 步：输入 reboot 重启
+
+                        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+                        注意事项：
+                        • 关闭 SIP 不会影响系统稳定性
+                        • 这是 macOS 上所有注入类工具的通用要求
+                        • 激活成功后可以重新开启 SIP（不影响已激活状态）
+                        • 如需重新开启 SIP，同样操作后执行 csrutil enable
+                        """)
+                    }
+                    return
+                }
+                
+                progress("✅ SIP 已关闭，具备注入能力")
+
                 progress("正在加载核心模块...")
 
                 guard let encData = NSData(contentsOfFile: pxxBinPath) as Data? else {
@@ -209,20 +256,21 @@ import AppKit
                 do {
                     try self.activateWithDYLDInject(surgeBin: surgeBin, dylibPath: dylibPath, progress: progress)
                 } catch {
-                    let sipEnabled = surge_check_sip_enabled()
-                    let errorMsg: String
-                    if sipEnabled {
-                        errorMsg = "激活失败，可能是 SIP 已开启导致的。\n\nSIP（System Integrity Protection）是 macOS 的系统完整性保护机制，开启状态下可能无法进行进程注入操作。\n\n建议关闭 SIP 后重试：\n1. 重启 Mac 并按住 Command + R 进入恢复模式\n2. 打开终端，执行：csrutil disable\n3. 重启 Mac 后再次尝试激活\n\n原始错误: \(error.localizedDescription)"
-                    } else {
-                        errorMsg = "激活失败: \(error.localizedDescription)"
-                    }
                     DispatchQueue.main.async {
-                        completion(false, errorMsg)
+                        completion(false, "激活失败: \(error.localizedDescription)")
                     }
                     return
                 }
 
                 Thread.sleep(forTimeInterval: 3)
+                
+                let runningApps = NSWorkspace.shared.runningApplications
+                for runningApp in runningApps {
+                    if runningApp.bundleIdentifier == app.bundleID {
+                        runningApp.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+                        break
+                    }
+                }
                 
                 self.fixHelper(progress: progress)
 
