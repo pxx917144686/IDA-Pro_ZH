@@ -214,7 +214,7 @@ import AppKit
                     return
                 }
                 
-                progress("✅ SIP 已关闭，具备注入能力")
+                progress("✅ SIP 已关闭")
 
                 progress("正在加载核心模块...")
 
@@ -324,14 +324,14 @@ import AppKit
         progress("正在修复系统代理权限...")
         
         let script = """
-        do shell script "/bin/launchctl load -w /Library/LaunchDaemons/com.nssurge.surge-mac.helper.plist" with administrator privileges
+        以管理员权限执行 shell 脚本 "/bin/launchctl load -w /Library/LaunchDaemons/com.nssurge.surge-mac.helper.plist"
         """
         
         var error: NSDictionary?
         if let appleScript = NSAppleScript(source: script) {
             appleScript.executeAndReturnError(&error)
             if error != nil {
-                progress("Helper 修复失败（可稍后手动修复）")
+                progress("Helper 修复失败")
             } else {
                 progress("系统代理权限修复成功")
             }
