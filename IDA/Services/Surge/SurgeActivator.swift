@@ -322,19 +322,62 @@ import AppKit
     
     private func fixHelper(progress: @escaping (String) -> Void) {
         progress("正在修复系统代理权限...")
-        
-        let script = """
-        以管理员权限执行 shell 脚本 "/bin/launchctl load -w /Library/LaunchDaemons/com.nssurge.surge-mac.helper.plist"
-        """
-        
-        var error: NSDictionary?
-        if let appleScript = NSAppleScript(source: script) {
-            appleScript.executeAndReturnError(&error)
-            if error != nil {
-                progress("Helper 修复失败")
-            } else {
-                progress("系统代理权限修复成功")
+
+        let helperPlist = "/Library/LaunchDaemons/com.nssurge.surge-mac.helper.plist"
+        let helperLabel = "com.nssurge.surge-mac.helper"
+        let fm = FileManager.default
+
+        // 1. Helper 文件不存在 → 直接跳过（Surge 首次启用系统代理时会自己安装）
+        guard fm.fileExists(atPath: helperPlist) else {
+            progress("Helper 尚未安装，Surge 首次启用系统代理时自动安装")
+            return
+        }
+
+        // 2. 先检查是否已经在运行 → 直接成功不重复执行
+        let check = Process()
+        check.launchPath = "/bin/launchctl"
+        check.arguments = ["print", "system/\(helperLabel)"]
+        let pipe = Pipe()
+        check.standardOutput = pipe
+        do {
+            try check.run()
+            check.waitUntilExit()
+            if check.terminationStatus == 0 {
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                let output = String(data: data, encoding: .utf8) ?? ""
+                if output.contains("state = running") {
+                    progress("系统代理权限已就绪 (Helper 运行中)")
+                    return
+                }
+            }
+        } catch {}
+
+        // 3. macOS 新版：bootstrap 优先；失败再 fallback 到旧 load 命令
+        let cmds: [[String]] = [
+            ["/bin/launchctl", "bootstrap", "system", helperPlist],
+            ["/bin/launchctl", "kickstart", "-k", "system/\(helperLabel)"],
+            ["/bin/launchctl", "load", "-w", helperPlist]
+        ]
+
+        var lastOk = false
+        for (idx, argv) in cmds.enumerated() {
+            let script = "do shell script \"\(argv.joined(separator: " "))\" with administrator privileges"
+            var err: NSDictionary?
+            autoreleasepool {
+                if let ascr = NSAppleScript(source: script) {
+                    ascr.executeAndReturnError(&err)
+                }
+            }
+            if err == nil {
+                lastOk = true
+                // 每个命令尝试成功后稍等一下状态刷新
+                Thread.sleep(forTimeInterval: 0.3)
+            } else if idx == cmds.count - 1 && !lastOk {
+                // 最后一步也失败 → 报失败但不阻断激活主流程
+                progress("Helper 修复失败（可在 Surge 内启用系统代理时按提示安装）")
+                return
             }
         }
+        progress(lastOk ? "系统代理权限修复成功" : "系统代理权限修复完成")
     }
 }
