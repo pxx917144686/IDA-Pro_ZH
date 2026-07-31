@@ -226,7 +226,11 @@ import AppKit
                     throw NSError(domain: "SurgeActivator", code: -2, userInfo: [NSLocalizedDescriptionKey: "核心模块解密失败"])
                 }
 
-                let dylibPath = tmpDir + "/pxx.dylib"
+                // pxx.dylib 写入长期缓存目录（不要写进 tmpDir，defer 会把 tmpDir 立刻删除，
+                // 导致随后由 launchd 独立启动的 Surge Dashboard 无法加载同一 dylib → DYLD SIGABRT）
+                let cacheDir = (NSHomeDirectory() as NSString).appendingPathComponent("Library/Caches/com.pxx917144686.IDA-Surge")
+                try fm.createDirectory(atPath: cacheDir, withIntermediateDirectories: true)
+                let dylibPath = cacheDir + "/pxx.dylib"
                 try dylibData.write(to: URL(fileURLWithPath: dylibPath), options: .atomic)
 
                 let cs = Process()
