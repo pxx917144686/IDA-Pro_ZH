@@ -319,7 +319,7 @@ static int inject_dylib_arm64(pid_t pid, const char *lib){
 }
 #endif
 
-int surge_spawn_and_inject(const char *app_path, const char *dylib_path, char **error_msg) {
+int surge_spawn_and_inject(const char *app_path, const char *dylib_path, char **error_msg, pid_t *out_pid) {
     injector_error_code = 0;
     injector_error_msg[0] = '\0';
     
@@ -347,9 +347,12 @@ int surge_spawn_and_inject(const char *app_path, const char *dylib_path, char **
         return spawn_result;
     }
     
+    if (out_pid) *out_pid = pid;
+    
     kern_return_t wait_kr = wait_for_dyld_loaded(pid);
     if (wait_kr != KERN_SUCCESS) {
         kill(pid, SIGKILL);
+        if (out_pid) *out_pid = 0;
         if (error_msg) {
             char buf[256];
             snprintf(buf, sizeof(buf), "wait_for_dyld failed: %s", mach_error_string(wait_kr));
@@ -369,6 +372,7 @@ int surge_spawn_and_inject(const char *app_path, const char *dylib_path, char **
     
     if (ret != 0) {
         kill(pid, SIGKILL);
+        if (out_pid) *out_pid = 0;
         if (error_msg) *error_msg = strdup(injector_error_msg);
         return ret;
     }

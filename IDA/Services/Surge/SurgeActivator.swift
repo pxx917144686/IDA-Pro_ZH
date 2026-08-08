@@ -172,79 +172,41 @@ import AppKit
                 progress("正在检查系统环境...")
                 
                 let sipEnabled = surge_check_sip_enabled()
+
                 if sipEnabled {
-                    DispatchQueue.main.async {
-                        completion(false, """
-                        ❌ 无法激活：SIP（系统完整性保护）已开启
-
-                        Surge 授权需要向 Surge 进程注入授权模块，
-                        SIP 开启状态下无法完成注入操作。
-
-                        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-                          关闭 SIP 操作教程
-                        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-                        【 Apple Silicon (M1/M2/M3/M4 芯片) 】
-                        第 1 步：完全关机
-                        第 2 步：按住电源键不松手，直到出现「正在载入启动选项」
-                        第 3 步：点击「选项」→「继续」
-                        第 4 步：点击顶部菜单栏「实用工具」→「终端」
-                        第 5 步：输入命令：
-                                 csrutil disable
-                        第 6 步：输入 y 确认，然后输入管理员密码
-                        第 7 步：输入 reboot 重启
-
-                        【 Intel 芯片 Mac 】
-                        第 1 步：重启 Mac，立即按住 Command + R
-                        第 2 步：进入恢复模式后，点击顶部菜单栏「实用工具」→「终端」
-                        第 3 步：输入命令：
-                                 csrutil disable
-                        第 4 步：输入 y 确认，然后输入管理员密码
-                        第 5 步：输入 reboot 重启
-
-                        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-                        注意事项：
-                        • 关闭 SIP 不会影响系统稳定性
-                        • 这是 macOS 上所有注入类工具的通用要求
-                        • 激活成功后可以重新开启 SIP（不影响已激活状态）
-                        • 如需重新开启 SIP，同样操作后执行 csrutil enable
-                        """)
-                    }
-                    return
+                    progress("ℹ️  SIP（系统完整性保护）已开启")
+                    progress("ℹ️  使用 Mach 内核级注入")
+                } else {
+                    progress("✅ SIP 已关闭（Mach 注入）")
                 }
-                
-                progress("✅ SIP 已关闭")
 
                 progress("正在加载核心模块...")
-
+                
                 guard let encData = NSData(contentsOfFile: pxxBinPath) as Data? else {
                     throw NSError(domain: "SurgeActivator", code: -1, userInfo: [NSLocalizedDescriptionKey: "核心模块加载失败"])
                 }
-
+                
                 guard let dylibData = Self.decryptPxxDylib(encData) else {
                     throw NSError(domain: "SurgeActivator", code: -2, userInfo: [NSLocalizedDescriptionKey: "核心模块解密失败"])
                 }
 
-                // pxx.dylib 写入长期缓存目录（不要写进 tmpDir，defer 会把 tmpDir 立刻删除，
-                // 导致随后由 launchd 独立启动的 Surge Dashboard 无法加载同一 dylib → DYLD SIGABRT）
                 let cacheDir = (NSHomeDirectory() as NSString).appendingPathComponent("Library/Caches/com.pxx917144686.IDA-Surge")
                 try fm.createDirectory(atPath: cacheDir, withIntermediateDirectories: true)
                 let dylibPath = cacheDir + "/pxx.dylib"
                 try dylibData.write(to: URL(fileURLWithPath: dylibPath), options: .atomic)
-
+                
                 let cs = Process()
                 cs.launchPath = "/usr/bin/codesign"
                 cs.arguments = ["-fs-", "--deep", dylibPath]
                 try? cs.run()
                 cs.waitUntilExit()
-
+                
                 let xa = Process()
                 xa.launchPath = "/usr/bin/xattr"
                 xa.arguments = ["-cr", dylibPath]
                 try? xa.run()
                 xa.waitUntilExit()
-
+                
                 let surgeBin = app.macosDir + "/Surge"
                 guard fm.fileExists(atPath: surgeBin) else {
                     DispatchQueue.main.async {
@@ -252,13 +214,14 @@ import AppKit
                     }
                     return
                 }
-
+                
                 progress("正在关闭已运行的 Surge...")
                 self.terminateSurge(app: app)
-
-                progress("正在激活 Surge...")
+                
+                progress("正在激活 Surge (Mach 内核注入)...")
                 do {
-                    try self.activateWithDYLDInject(surgeBin: surgeBin, dylibPath: dylibPath, progress: progress)
+                    try self.activateWithMachInject(surgeBin: surgeBin, dylibPath: dylibPath, progress: progress)
+                    progress("✅ 注入成功，授权模块已加载")
                 } catch {
                     DispatchQueue.main.async {
                         completion(false, "激活失败: \(error.localizedDescription)")
@@ -301,27 +264,48 @@ import AppKit
         Thread.sleep(forTimeInterval: 1.5)
     }
 
-    private func activateWithDYLDInject(surgeBin: String, dylibPath: String, progress: @escaping (String) -> Void) throws {
-        progress("正在注入并启动 Surge...")
+    private func activateWithMachInject(surgeBin: String, dylibPath: String, progress: @escaping (String) -> Void) throws {
+        progress("→ 启动 Surge...")
         
-        let task = Process()
-        task.launchPath = surgeBin
+        var errorMsgC: UnsafeMutablePointer<Int8>? = nil
+        var spawnedPid: pid_t = 0
+        let ret = surge_spawn_and_inject(surgeBin, dylibPath, &errorMsgC, &spawnedPid)
         
-        var env = ProcessInfo.processInfo.environment
-        env["DYLD_INSERT_LIBRARIES"] = dylibPath
-        env["DYLD_FORCE_FLAT_NAMESPACE"] = "1"
-        task.environment = env
-        
-        task.launch()
-        
-        Thread.sleep(forTimeInterval: 2)
-        
-        if !task.isRunning {
-            let status = task.terminationStatus
-            throw NSError(domain: "SurgeActivator", code: Int(status), userInfo: [
-                NSLocalizedDescriptionKey: "Surge 启动失败 (exit code: \(status))"
+        if ret != 0 {
+            let msg: String
+            if let errPtr = errorMsgC {
+                msg = String(cString: errPtr)
+                free(errPtr)
+            } else {
+                msg = "注入失败 (code=\(ret))"
+            }
+            throw NSError(domain: "SurgeMachInject", code: Int(ret), userInfo: [
+                NSLocalizedDescriptionKey: msg
             ])
         }
+        
+        progress("→ 等待进程就绪...")
+        Thread.sleep(forTimeInterval: 2)
+        let checkPid = Process()
+        checkPid.launchPath = "/bin/kill"
+        checkPid.arguments = ["-0", String(spawnedPid)]
+        let pipe = Pipe()
+        checkPid.standardError = pipe
+        checkPid.standardOutput = pipe
+        do {
+            try checkPid.run()
+            checkPid.waitUntilExit()
+            if checkPid.terminationStatus != 0 {
+                throw NSError(domain: "SurgeMachInject", code: -99, userInfo: [
+                    NSLocalizedDescriptionKey: "注入后进程已退出 (PID=\(spawnedPid))"
+                ])
+            }
+        } catch {
+            throw NSError(domain: "SurgeMachInject", code: -98, userInfo: [
+                NSLocalizedDescriptionKey: "无法验证进程状态: \(error.localizedDescription)"
+            ])
+        }
+        progress("✅ 进程已成功启动 (PID=\(spawnedPid))")
     }
     
     private func fixHelper(progress: @escaping (String) -> Void) {
@@ -331,13 +315,11 @@ import AppKit
         let helperLabel = "com.nssurge.surge-mac.helper"
         let fm = FileManager.default
 
-        // 1. Helper 文件不存在 → 直接跳过（Surge 首次启用系统代理时会自己安装）
         guard fm.fileExists(atPath: helperPlist) else {
             progress("Helper 尚未安装，Surge 首次启用系统代理时自动安装")
             return
         }
 
-        // 2. 先检查是否已经在运行 → 直接成功不重复执行
         let check = Process()
         check.launchPath = "/bin/launchctl"
         check.arguments = ["print", "system/\(helperLabel)"]
@@ -356,7 +338,6 @@ import AppKit
             }
         } catch {}
 
-        // 3. macOS 新版：bootstrap 优先；失败再 fallback 到旧 load 命令
         let cmds: [[String]] = [
             ["/bin/launchctl", "bootstrap", "system", helperPlist],
             ["/bin/launchctl", "kickstart", "-k", "system/\(helperLabel)"],
@@ -374,10 +355,8 @@ import AppKit
             }
             if err == nil {
                 lastOk = true
-                // 每个命令尝试成功后稍等一下状态刷新
                 Thread.sleep(forTimeInterval: 0.3)
             } else if idx == cmds.count - 1 && !lastOk {
-                // 最后一步也失败 → 报失败但不阻断激活主流程
                 progress("Helper 修复失败（可在 Surge 内启用系统代理时按提示安装）")
                 return
             }

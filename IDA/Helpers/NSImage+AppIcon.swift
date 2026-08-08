@@ -11,7 +11,7 @@ extension NSImage {
         }
         
         let colorSpace = CGColorSpaceCreateDeviceRGB()
-        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+        let bitmapInfo = CGImageAlphaInfo.noneSkipLast.rawValue
         
         guard let context = CGContext(
             data: nil,
@@ -60,6 +60,8 @@ extension NSImage {
         context.addPath(iconPath)
         context.clip()
         
+        context.setFillColor(CGColor.white)
+        context.fill(rect)
         context.draw(cgImage, in: rect)
         
         context.restoreGState()

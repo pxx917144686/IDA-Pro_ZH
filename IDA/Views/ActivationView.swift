@@ -21,13 +21,11 @@ struct ActivationView: View {
                 }
                 .padding(.top, 20)
 
-
                 if let selectedApp = appState.selectedApp {
                     IDASelectionCard(app: selectedApp)
                 } else {
                     NoIDACard()
                 }
-
 
                 if appState.selectedApp != nil {
                     VStack(alignment: .leading, spacing: 16) {
@@ -49,7 +47,6 @@ struct ActivationView: View {
                                 .stroke(Color.secondary.opacity(0.15), lineWidth: 1)
                         )
                     }
-
 
                     Button {
                         appState.activate()
@@ -79,7 +76,6 @@ struct ActivationView: View {
                     .buttonStyle(.plain)
                     .disabled(appState.isProcessing || appState.selectedApp == nil)
                 }
-
 
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {

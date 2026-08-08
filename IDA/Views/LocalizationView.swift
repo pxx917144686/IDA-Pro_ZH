@@ -79,7 +79,6 @@ struct LocalizationView: View {
                     }
                 }
 
-
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         IDAColorfulIcon(systemName: "terminal.fill", size: 14)

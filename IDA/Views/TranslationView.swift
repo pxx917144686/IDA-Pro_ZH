@@ -16,9 +16,7 @@ struct TranslationView: View {
 
             topStatsView
 
-
             searchBar
-
 
             translationList
         }
@@ -42,7 +40,6 @@ struct TranslationView: View {
             }
         }
     }
-
 
     private var topStatsView: some View {
         HStack(spacing: 12) {
@@ -97,7 +94,6 @@ struct TranslationView: View {
         .background(Color(nsColor: .controlBackgroundColor))
     }
 
-
     private var searchBar: some View {
         HStack {
             IDAColorfulIcon(systemName: "magnifyingglass", size: 14)
@@ -125,7 +121,6 @@ struct TranslationView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
     }
-
 
     private var translationList: some View {
         Group {
@@ -161,7 +156,6 @@ struct TranslationView: View {
         }
     }
 
-
     private var emptyState: some View {
         VStack(spacing: 12) {
             IDAColorfulIcon(systemName: "magnifyingglass", size: 36)
@@ -175,7 +169,6 @@ struct TranslationView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-
 
     private var addTranslationSheet: some View {
         VStack(spacing: 0) {
@@ -280,7 +273,6 @@ struct TranslationView: View {
         .background(Color(nsColor: .windowBackgroundColor))
     }
 
-
     private var editTranslationSheet: some View {
         VStack(spacing: 0) {
             HStack {
@@ -381,7 +373,6 @@ struct TranslationView: View {
     }
 }
 
-
 struct StatCard: View {
     let title: String
     let value: String
@@ -413,7 +404,6 @@ struct StatCard: View {
     }
 }
 
-
 struct TranslationRow: View {
     let original: String
     let translated: String
@@ -434,7 +424,6 @@ struct TranslationRow: View {
             }
             .frame(width: 20)
 
-
             VStack(alignment: .leading, spacing: 6) {
                 Text(original)
                     .font(.system(size: 13, weight: .medium))
@@ -450,7 +439,6 @@ struct TranslationRow: View {
             }
 
             Spacer()
-
 
             if isHovered {
                 HStack(spacing: 4) {

@@ -62,6 +62,12 @@ class AppState: ObservableObject {
     
     @Published var useCustomIcon = false {
         didSet {
+            
+            if useCustomIcon {
+                GIFDockAnimator.shared.start()
+            } else {
+                GIFDockAnimator.shared.stop()
+            }
             updateAppIcon()
         }
     }
@@ -81,13 +87,22 @@ class AppState: ObservableObject {
     private func updateAppIcon() {
         UserDefaults.standard.set(useCustomIcon, forKey: "useCustomIcon")
         if useCustomIcon {
-            if let icon = NSImage(named: "IDAAppIcon") {
-                NSWorkspace.shared.setIcon(icon, forFile: Bundle.main.bundlePath)
-                NSApp.applicationIconImage = icon.asMacOSAppIcon()
+            NSWorkspace.shared.setIcon(nil, forFile: Bundle.main.bundlePath)
+            if !GIFDockAnimator.shared.isRunning {
+                NSApp.applicationIconImage = nil
             }
         } else {
-            NSWorkspace.shared.setIcon(nil, forFile: Bundle.main.bundlePath)
-            NSApp.applicationIconImage = nil
+            if let icon = NSImage(named: "AppIcon") {
+                NSWorkspace.shared.setIcon(icon, forFile: Bundle.main.bundlePath)
+                if GIFDockAnimator.shared.isRunning {
+                    GIFDockAnimator.shared.stop()
+                } else {
+                    NSApp.applicationIconImage = icon.asMacOSAppIcon()
+                }
+            } else {
+                NSWorkspace.shared.setIcon(nil, forFile: Bundle.main.bundlePath)
+                NSApp.applicationIconImage = nil
+            }
         }
     }
 

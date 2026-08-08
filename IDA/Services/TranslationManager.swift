@@ -79,11 +79,9 @@ class TranslationManager: ObservableObject {
     func addTranslation(original: String, translated: String) -> Bool {
         guard !original.isEmpty else { return false }
 
-
         var custom = loadCustomTranslations()
         custom[original] = translated
         saveCustomTranslations(custom)
-
 
         translations[original] = translated
 
@@ -95,7 +93,6 @@ class TranslationManager: ObservableObject {
         var custom = loadCustomTranslations()
         custom.removeValue(forKey: original)
         saveCustomTranslations(custom)
-
 
         loadTranslations()
     }
